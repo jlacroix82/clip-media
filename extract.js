@@ -27,6 +27,7 @@ const listTypes = args.includes('--list-types') && url;
 const testMode = args.includes('--test');
 const uploadToCloud = args.includes('--upload');
 const noUpload = args.includes('--no-upload');
+const confirmUpload = args.includes('--confirm-upload');
 const cloudProvider = args.find(a => a.startsWith('--cloud='))?.split('=')[1] || null;
 const directSend = !args.includes('--no-direct-send');
 
@@ -244,8 +245,21 @@ function ensureDir(dir) {
 
 // ── Cloud Upload ──────────────────────────────────────────────────────────────
 
+function validateUploadPath(filePath, outputDir) {
+  const resolved = path.resolve(filePath);
+  const base = path.resolve(outputDir);
+  if (!resolved.startsWith(base + path.sep) && resolved !== base) {
+    throw new Error(`SECURITY: Upload path ${resolved} is outside output dir ${base}`);
+  }
+  if (!fs.existsSync(resolved)) {
+    throw new Error(`File not found: ${resolved}`);
+  }
+  return resolved;
+}
+
 function uploadToTmpfiles(filePath) {
   return new Promise((resolve, reject) => {
+    filePath = validateUploadPath(filePath, outputDir);
     const stat = fs.statSync(filePath);
     const fileSize = stat.size;
     const fileName = path.basename(filePath);
@@ -288,6 +302,7 @@ function uploadToTmpfiles(filePath) {
 
 function uploadToTransferSh(filePath) {
   return new Promise((resolve, reject) => {
+    filePath = validateUploadPath(filePath, outputDir);
     const stat = fs.statSync(filePath);
     const fileName = path.basename(filePath);
 
@@ -332,7 +347,20 @@ function smartUpload(filePath, provider) {
 function needsCloudUpload(filePath) {
   if (noUpload) return false;
   const stat = fs.statSync(filePath);
-  return stat.size > MAX_DIRECT_SEND || uploadToCloud;
+  const sizeExceeds = stat.size > MAX_DIRECT_SEND;
+  const uploadFlag = uploadToCloud;
+  
+  if (sizeExceeds || uploadFlag) {
+    if (!confirmUpload) {
+      console.error(`\n⛔ UPLOAD BLOCKED — --confirm-upload required`);
+      console.error(`   File is ${(stat.size / 1048576).toFixed(1)} MB.`);
+      console.error(`   To upload to public cloud, run with: --confirm-upload`);
+      console.error(`   To save locally only: --no-upload`);
+      return 'needs_confirm';
+    }
+    return true;
+  }
+  return false;
 }
 
 // ── List types for a URL ──────────────────────────────────────────────────────
@@ -381,8 +409,6 @@ ensureDir(outputDir);
 
 // Record files in output dir before download (to detect new files)
 const preFiles = new Set(fs.readdirSync(outputDir));
-
-const ytDlpOpts = ['--no-download', '-J', '--no-warnings', '--flat-playlist', `"${url}"`];
 
 let info;
 try {
@@ -462,16 +488,21 @@ const outPath = path.join(outputDir, `${info.id || 'media'}.${ext}`);
       if (duration) console.log(`   Duration: ${duration}`);
       console.log(`   Title: ${title}`);
 
-      if (needsCloudUpload(newPath)) {
+      const uploadResult = needsCloudUpload(newPath);
+      if (uploadResult === true) {
         const provider = cloudProvider || 'tmpfiles';
-        console.log(`\n⚠️ PRE-UPLOAD WARNING: File > 50MB would be uploaded to public cloud (${provider})`);
+        console.log(`\n⚠️ Uploading to public cloud (${provider})...`);
         console.log(`   ${provider} is a public temp host. Anyone with the link can access this file.`);
-        console.log(`   Do NOT upload private, paid, or sensitive content.`);
-        console.log(`   Use --no-upload to skip cloud upload and return local path only.`);
         const cloudUrl = await smartUpload(newPath, provider);
         if (cloudUrl) {
           console.log(`🔗 Link: ${cloudUrl}`);
         }
+      } else if (uploadResult === 'needs_confirm') {
+        console.log(`\n✅ Downloaded: ${newPath}`);
+        console.log(`   Size: ${(stat.size / 1048576).toFixed(1)} MB`);
+        console.log(`   Title: ${title}`);
+        console.log(`\n⛔ Not uploaded — public cloud upload requires --confirm-upload flag.`);
+        console.log(`   Use --no-upload to save locally without prompts.`);
       } else if (directSend) {
         console.log(`\n✅ File is small enough to send directly via chat.`);
         console.log(`   Path: ${newPath}`);
@@ -486,16 +517,21 @@ const outPath = path.join(outputDir, `${info.id || 'media'}.${ext}`);
         if (duration) console.log(`   Duration: ${duration}`);
         console.log(`   Title: ${title}`);
 
-        if (needsCloudUpload(outPath)) {
+        const uploadResult2 = needsCloudUpload(outPath);
+        if (uploadResult2 === true) {
           const provider = cloudProvider || 'tmpfiles';
-          console.log(`\n⚠️ PRE-UPLOAD WARNING: File > 50MB would be uploaded to public cloud (${provider})`);
+          console.log(`\n⚠️ Uploading to public cloud (${provider})...`);
           console.log(`   ${provider} is a public temp host. Anyone with the link can access this file.`);
-          console.log(`   Do NOT upload private, paid, or sensitive content.`);
-          console.log(`   Use --no-upload to skip cloud upload and return local path only.`);
           const cloudUrl = await smartUpload(outPath, provider);
           if (cloudUrl) {
             console.log(`🔗 Link: ${cloudUrl}`);
           }
+        } else if (uploadResult2 === 'needs_confirm') {
+          console.log(`\n✅ Downloaded: ${outPath}`);
+          console.log(`   Size: ${(stat.size / 1048576).toFixed(1)} MB`);
+          console.log(`   Title: ${title}`);
+          console.log(`\n⛔ Not uploaded — public cloud upload requires --confirm-upload flag.`);
+          console.log(`   Use --no-upload to save locally without prompts.`);
         } else if (directSend) {
           console.log(`\n✅ File is small enough to send directly via chat.`);
           console.log(`   Path: ${outPath}`);

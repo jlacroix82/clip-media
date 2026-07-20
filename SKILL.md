@@ -1,15 +1,14 @@
 ---
 name: clip
-description: Extract media (videos, photos, GIFs, audio) from social media URLs using yt-dlp. Supports 1,872+ platforms. WARNING: files over 50 MB are uploaded to public third-party hosts. Browser cookie access exposes authentication material. Only use with non-sensitive content.
+description: Extract media (videos, photos, GIFs, audio) from social media URLs using yt-dlp. Supports 1,872+ platforms. WARNING: files over 50 MB require --confirm-upload for public cloud upload. Browser cookie access exposes authentication material. Only use with non-sensitive content.
 ---
 
 # Clip
 
 ⚠️ **Security warnings before use:**
-- Files over 50 MB are uploaded to **public third-party file hosts** (tmpfiles.org, transfer.sh) — not private
+- Files over 50 MB **require `--confirm-upload`** to upload to public third-party hosts (tmpfiles.org, transfer.sh)
 - Browser cookie access (`--cookies-from-browser`) exposes **active session tokens** for any platform you're logged into
 - **Never** use with private, paid, confidential, copyrighted, or regulated content unless you explicitly intend external transmission
-- Default behavior includes external upload — confirm before use
 
 ## How It Works
 
@@ -36,6 +35,7 @@ node /home/jarvis/.openclaw/workspace/skills/clip/extract.js <url> [options]
 | `--info` | Return full metadata as JSON |
 | `--test` | Validate URL without downloading |
 | `--upload` | Force cloud upload even for small files |
+| `--confirm-upload` | **Required for any public cloud upload** — explicit opt-in |
 | `--cloud=<provider>` | Cloud provider: `tmpfiles` or `transfer` |
 | `--no-direct-send` | Always return path, never auto-send |
 | `--no-upload` | **Skip cloud upload entirely** — always return local path |
@@ -68,8 +68,9 @@ YouTube, TikTok, Instagram, X/Twitter, Facebook, Reddit, Twitch, Vimeo, Dailymot
 ## File Size Handling
 
 - **Under 50 MB** → Returns local file path (agent sends via chat)
-- **Over 50 MB** → Auto-uploads to temp cloud storage, returns download link
-- **Over 50 MB + `--upload`** → Forces cloud upload even for smaller files
+- **Over 50 MB** → Requires `--confirm-upload` to upload to temp cloud storage, returns download link
+- **Over 50 MB without `--confirm-upload`** → Returns local path only, blocks upload with clear message
+- **Over 50 MB + `--upload`** → Forces cloud upload even for smaller files (still requires `--confirm-upload`)
 
 ### Cloud Providers
 
@@ -80,7 +81,7 @@ YouTube, TikTok, Instagram, X/Twitter, Facebook, Reddit, Twitch, Vimeo, Dailymot
 | `tmpfiles` | 50 MB | Simple, no signup, auto-delete |
 | `transfer` | Unlimited | transfer.sh, 30-day retention |
 
-**Pre-upload warning:** The script now shows a warning before any upload. Use `--no-upload` to disable cloud upload entirely and always return the local file path.
+**Pre-upload warning:** Files over 50 MB require `--confirm-upload` for any public cloud upload. Without it, the script returns the local path only and blocks the upload with a clear message. Use `--no-upload` to always save locally without prompts.
 
 ## Authentication
 

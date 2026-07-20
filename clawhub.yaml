@@ -1,0 +1,17 @@
+slug: clip-media
+name: Clip Media
+owner: jlacroix82
+description: Extract and download media from URLs using yt-dlp with optional upload support
+version: 0.3.2
+type: skill
+author: OpenClaw
+license: MIT
+keywords:
+  - media
+  - download
+  - yt-dlp
+  - video
+  - agent
+entry: SKILL.md
+dependencies:
+  - yt-dlp
